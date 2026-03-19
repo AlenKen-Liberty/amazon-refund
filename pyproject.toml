@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "amazon-refund"
+version = "0.1.0"
+description = "Amazon price tracking and refund automation CLI"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "APScheduler>=3.10,<4",
+    "httpx>=0.27,<1",
+    "oracledb>=3.0,<4",
+    "patchright>=1.58,<1.59",
+    "pydantic-settings>=2.0,<3",
+    "rich>=13.0,<14",
+    "typer>=0.12,<1",
+]
+
+[project.optional-dependencies]
+anthropic = ["anthropic>=1.0,<2"]
+openai = ["openai>=1.0,<2"]
+notify = ["python-telegram-bot>=21.0,<22"]
+dev = [
+    "pytest>=8.0,<9",
+    "pytest-mock>=3.12,<4",
+    "ruff>=0.4,<1",
+]
+
+[project.scripts]
+ar = "src.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+markers = ["manual: tests that require a real Amazon session and Oracle DB"]
