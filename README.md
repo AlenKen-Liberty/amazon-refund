@@ -2,7 +2,7 @@
 
 Amazon order monitoring and refund-chat automation for price drops.
 
-The project connects to your already logged-in Chrome session through CDP, stores order and price state in Oracle, and uses a configurable OpenAI-compatible LLM endpoint to generate customer-service replies.
+The project connects to your already logged-in Chrome session through CDP, stores order and price state in a configurable database backend, and uses a configurable OpenAI-compatible LLM endpoint to generate customer-service replies.
 
 ## What You Can Do With It
 
@@ -45,7 +45,7 @@ For the full Amazon workflow you also need:
 - Python 3.11
 - Chromium or Chrome running with CDP on port `9222`
 - An Amazon account already signed in inside that browser
-- Oracle DB credentials in `.env`
+- A database backend configured in `.env`
 
 ## Installation
 
@@ -92,10 +92,17 @@ If you use one of the non-default providers, also fill the matching settings in 
 
 These settings are required for the database-backed workflow:
 
+- `AR_DB_BACKEND`
 - `AR_DB_USER`
 - `AR_DB_PASSWORD`
 - `AR_DB_DSN`
 - `AR_DB_WALLET_DIR` and `AR_DB_WALLET_PASSWORD` only if your Oracle deployment needs a wallet
+
+Current status:
+
+- The repository ships with an Oracle implementation out of the box
+- `AR_DB_BACKEND` makes the storage choice explicit in user config
+- If you want Postgres, MySQL, SQLite, or another store, swap the `src/db/` implementation and keep `AR_DB_BACKEND` aligned with your adapter
 
 ### Required for Browser Automation
 
@@ -173,7 +180,7 @@ ar test-llm
 
 ### Order collection
 
-`src/collector/order_scraper.py` reads Amazon order-history cards, follows order-detail pages, and stores orders and purchased items in Oracle.
+`src/collector/order_scraper.py` reads Amazon order-history cards, follows order-detail pages, and stores orders and purchased items in the configured backend.
 
 ### Price checking
 

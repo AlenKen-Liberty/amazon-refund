@@ -31,7 +31,7 @@ console = Console()
 
 @app.command()
 def init_db() -> None:
-    """Create Oracle tables and indexes."""
+    """Create database tables and indexes."""
     db.init_pool()
     create_tables(db)
     db.close()
@@ -42,7 +42,7 @@ def init_db() -> None:
 def collect(
     days: int = typer.Option(90, min=1, help="Collect orders from the last N days."),
 ) -> None:
-    """Collect Amazon orders and items into Oracle DB."""
+    """Collect Amazon orders and items into the configured database."""
     repository = OrderRepository()
     browser = BrowserManager()
 

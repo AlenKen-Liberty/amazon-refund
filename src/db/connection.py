@@ -21,6 +21,7 @@ class Database:
         if self._pool is not None and force:
             self.close()
 
+        self._validate_backend()
         self._validate_required_settings()
 
         import oracledb
@@ -62,6 +63,17 @@ class Database:
             self._pool = None
 
     @staticmethod
+    def _validate_backend() -> None:
+        backend = settings.db_backend.lower().strip()
+        if backend != "oracle":
+            raise NotImplementedError(
+                "Unsupported database backend "
+                f"{settings.db_backend!r}. The built-in implementation currently supports "
+                "'oracle'. If you want another store, replace the src/db layer and keep "
+                "AR_DB_BACKEND in sync."
+            )
+
+    @staticmethod
     def _validate_required_settings() -> None:
         required = {
             "AR_DB_USER": settings.db_user,
@@ -70,7 +82,9 @@ class Database:
         }
         missing = [name for name, value in required.items() if not value]
         if missing:
-            raise ValueError(f"Missing Oracle settings: {', '.join(missing)}")
+            raise ValueError(
+                f"Missing database settings for the oracle backend: {', '.join(missing)}"
+            )
 
 
 db = Database()

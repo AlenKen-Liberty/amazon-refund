@@ -100,6 +100,7 @@ def _resolve_annotation(annotation: Any, default: Any) -> Any:
 class Settings(BaseSettings):
     cdp_port: int = 9222
 
+    db_backend: str = "oracle"
     db_user: str = ""
     db_password: str = ""
     db_dsn: str = ""
