@@ -230,7 +230,7 @@ def refund(
         llm = LLMClient()
         try:
             if not llm.health_check():
-                console.print("[red]Chat2API is not reachable. Start it first.[/red]")
+                console.print("[red]Configured LLM service is not reachable.[/red]")
                 raise typer.Exit(1)
         finally:
             llm.close()
@@ -304,14 +304,14 @@ def test_llm(
         "Hello, can you help me?", help="Test message to send."
     ),
 ) -> None:
-    """Verify Chat2API connectivity and print one response."""
+    """Verify LLM connectivity and print one response."""
     llm = LLMClient()
     try:
         if not llm.health_check():
-            console.print("[red]Chat2API is offline.[/red]")
+            console.print("[red]Configured LLM service is offline.[/red]")
             raise typer.Exit(1)
 
-        console.print(f"[green]Chat2API online. Model: {llm.model}[/green]")
+        console.print(f"[green]LLM service online. Model: {llm.model}[/green]")
         console.print(f"Sending: {message}")
         reply = llm.chat([{"role": "user", "content": message}])
         console.print(f"[cyan]Reply: {reply}[/cyan]")

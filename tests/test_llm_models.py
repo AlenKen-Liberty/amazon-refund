@@ -1,4 +1,4 @@
-"""Model compatibility tests for Chat2API.
+"""Model compatibility tests for the configured LLM service.
 
 These tests verify that every model tier and every provider behaves correctly
 for the specific capabilities the refund agent needs:
@@ -12,7 +12,7 @@ for the specific capabilities the refund agent needs:
 Run with:
     pytest tests/test_llm_models.py -v
 
-Tests marked ``@pytest.mark.live`` require Chat2API to be running.
+Tests marked ``@pytest.mark.live`` require the configured LLM service to be running.
 """
 
 from __future__ import annotations
@@ -106,16 +106,16 @@ class TestClientInit:
         assert client.model == "gemini-2.5-flash"
 
 
-# ── Live integration tests (require Chat2API) ────────────────────────
+# ── Live integration tests (require the configured LLM service) ──────
 
-def _chat2api_online() -> bool:
+def _llm_service_online() -> bool:
     try:
         return LLMClient().health_check()
     except Exception:
         return False
 
 
-@pytest.mark.skipif(not _chat2api_online(), reason="Chat2API not running")
+@pytest.mark.skipif(not _llm_service_online(), reason="LLM service not running")
 class TestSingleTurn:
     """Every tier must be able to answer a trivial one-shot question."""
 
@@ -133,7 +133,7 @@ class TestSingleTurn:
         assert "hello" in reply.lower()
 
 
-@pytest.mark.skipif(not _chat2api_online(), reason="Chat2API not running")
+@pytest.mark.skipif(not _llm_service_online(), reason="LLM service not running")
 class TestMultiTurn:
     """Multi-turn context via packed transcript (the only format both backends accept).
 
@@ -177,7 +177,7 @@ class TestMultiTurn:
         assert "111" in reply or "222" in reply or "333" in reply
 
 
-@pytest.mark.skipif(not _chat2api_online(), reason="Chat2API not running")
+@pytest.mark.skipif(not _llm_service_online(), reason="LLM service not running")
 class TestStreaming:
     """Verify streaming works for at least one model."""
 
@@ -192,7 +192,7 @@ class TestStreaming:
         assert len(full) > 0
 
 
-@pytest.mark.skipif(not _chat2api_online(), reason="Chat2API not running")
+@pytest.mark.skipif(not _llm_service_online(), reason="LLM service not running")
 class TestRefundScenario:
     """End-to-end test: can the LLM generate a natural refund reply?"""
 

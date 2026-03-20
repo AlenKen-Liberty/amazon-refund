@@ -1,4 +1,4 @@
-"""Unified LLM client for Chat2API with tiered model selection.
+"""Unified LLM client for the configured OpenAI-compatible LLM service.
 
 Model tiers
 -----------
@@ -6,14 +6,8 @@ Model tiers
 - **balanced** — quality + speed  (gemini-2.5-pro by default)
 - **fast**     — low-latency     (gemini-2.5-flash by default)
 
-Callers pick a tier; the tier resolves to a concrete model name that
-Chat2API routes to the underlying provider.
-
-Quota note
-----------
-Chat2API and code-orchestra share the **same** underlying account pools
-(``~/.codex/accounts/`` and ``~/.gemini/accounts/``).  Every request made
-here counts against the same weekly / daily quotas.
+Callers pick a tier; the tier resolves to a concrete model name exposed
+by the configured endpoint.
 
 Provider quirks
 ---------------
@@ -57,7 +51,7 @@ class ModelTier(str, Enum):
 
 
 def resolve_tier(tier: ModelTier | str) -> str:
-    """Map a tier to the concrete Chat2API model name from config."""
+    """Map a tier to the concrete configured model name."""
     if isinstance(tier, str):
         tier = ModelTier(tier)
     mapping = {
@@ -69,7 +63,7 @@ def resolve_tier(tier: ModelTier | str) -> str:
 
 
 class LLMClient:
-    """OpenAI-compatible client for the local Chat2API service."""
+    """OpenAI-compatible client for the configured LLM service."""
 
     def __init__(
         self,
@@ -79,11 +73,11 @@ class LLMClient:
         tier: ModelTier | str | None = None,
         timeout: float = 120.0,
     ) -> None:
-        self.base_url = (base_url or settings.chat2api_url).rstrip("/")
+        self.base_url = (base_url or settings.llm_base_url).rstrip("/")
         if tier is not None:
             self.model = resolve_tier(tier)
         else:
-            self.model = model or settings.chat2api_model
+            self.model = model or settings.llm_model
         self._client = httpx.Client(timeout=timeout)
 
     # ------------------------------------------------------------------ #
@@ -108,7 +102,7 @@ class LLMClient:
         data = response.json()
         choices = data.get("choices") or []
         if not choices:
-            raise ValueError("Chat2API returned no choices.")
+            raise ValueError("LLM service returned no choices.")
 
         message = choices[0].get("message") or {}
         content = message.get("content")
@@ -125,7 +119,7 @@ class LLMClient:
                 if isinstance(part, dict) and part.get("type") == "text"
             ]
             return "".join(text_parts).strip()
-        raise ValueError("Chat2API returned an unsupported message format.")
+        raise ValueError("LLM service returned an unsupported message format.")
 
     # ------------------------------------------------------------------ #
     #  Streaming                                                          #
@@ -199,11 +193,11 @@ class LLMClient:
 
     @staticmethod
     def _log_degradation(response: httpx.Response) -> None:
-        """Print a warning if Chat2API degraded to a different model."""
+        """Print a warning if the upstream gateway degraded to a different model."""
         headers = response.headers
-        if headers.get("x-chat2api-degraded", "").lower() == "true":
-            actual = headers.get("x-chat2api-actual-model", "?")
-            reason = headers.get("x-chat2api-degraded-reason", "unknown")
+        if headers.get("x-llm-degraded", "").lower() == "true":
+            actual = headers.get("x-llm-actual-model", "?")
+            reason = headers.get("x-llm-degraded-reason", "unknown")
             import sys
             print(
                 f"[LLM] degraded to {actual} ({reason})",

@@ -21,8 +21,8 @@ Page text:
             return None
 
         provider = settings.llm_provider.lower()
-        if provider == "chat2api":
-            return self._query_chat2api(text)
+        if provider in {"openai_compatible", "gateway"}:
+            return self._query_llm_service(text)
         if provider == "ollama":
             return self._query_ollama(text)
         if provider == "anthropic" and settings.anthropic_api_key:
@@ -48,7 +48,7 @@ Page text:
 
         return self._coerce_price(response.json().get("response", ""))
 
-    def _query_chat2api(self, text: str) -> float | None:
+    def _query_llm_service(self, text: str) -> float | None:
         client = LLMClient()
         try:
             reply = client.chat(

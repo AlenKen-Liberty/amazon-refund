@@ -106,16 +106,16 @@ class Settings(BaseSettings):
     db_wallet_dir: str | None = None
     db_wallet_password: str | None = None
 
-    llm_provider: str = "ollama"
+    llm_provider: str = "openai_compatible"
+    llm_base_url: str = "http://127.0.0.1:7860"
+    llm_model: str = "codex"
     ollama_url: str = "http://localhost:11434"
     ollama_model: str = "qwen3:8b"
-    chat2api_url: str = "http://127.0.0.1:7860"
-    chat2api_model: str = "codex"
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
 
     # ── Model tiers ──
-    # Callers pick a tier; the tier resolves to a concrete Chat2API model.
+    # Callers pick a tier; the tier resolves to a concrete model name.
     #   thinking : deep reasoning (complex decisions, fallback analysis)
     #   balanced : good quality + reasonable speed (general use)
     #   fast     : low-latency replies (live customer service chat)

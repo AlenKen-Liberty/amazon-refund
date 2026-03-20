@@ -5,7 +5,7 @@ import pytest
 from src.llm.client import LLMClient
 
 
-def _chat2api_available() -> bool:
+def _llm_service_available() -> bool:
     client = LLMClient()
     try:
         return client.health_check()
@@ -31,7 +31,7 @@ def llm():
     client.close()
 
 
-@pytest.mark.skipif(not _chat2api_available(), reason="Chat2API not running")
+@pytest.mark.skipif(not _llm_service_available(), reason="LLM service not running")
 class TestLLMClientIntegration:
     def test_health_check(self, llm) -> None:
         assert llm.health_check()

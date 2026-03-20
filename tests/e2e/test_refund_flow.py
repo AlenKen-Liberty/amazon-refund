@@ -10,6 +10,6 @@ class TestRefundE2E:
 
         llm = LLMClient()
         try:
-            assert llm.health_check(), "Chat2API is offline"
+            assert llm.health_check(), "Configured LLM service is offline"
         finally:
             llm.close()

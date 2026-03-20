@@ -81,12 +81,12 @@ def main():
     console.print("[green]✓ Chrome connected[/green]")
 
     llm = LLMClient(tier=args.tier)
-    with timed("Chat2API health") as t:
+    with timed("LLM health") as t:
         healthy = llm.health_check()
     if not healthy:
-        console.print("[red]✗ Chat2API offline[/red]")
+        console.print("[red]✗ LLM service offline[/red]")
         return 1
-    console.print(f"[green]✓ Chat2API online, model={llm.model}[/green]")
+    console.print(f"[green]✓ LLM service online, model={llm.model}[/green]")
 
     # ── Step 1: Find the target item ──────────────────────────────────
     console.rule("Step 1: Target Item")
