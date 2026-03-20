@@ -1,12 +1,71 @@
+"""Unified LLM client for Chat2API with tiered model selection.
+
+Model tiers
+-----------
+- **thinking** — deep reasoning (codex / gpt-5.4 by default)
+- **balanced** — quality + speed  (gemini-2.5-pro by default)
+- **fast**     — low-latency     (gemini-2.5-flash by default)
+
+Callers pick a tier; the tier resolves to a concrete model name that
+Chat2API routes to the underlying provider.
+
+Quota note
+----------
+Chat2API and code-orchestra share the **same** underlying account pools
+(``~/.codex/accounts/`` and ``~/.gemini/accounts/``).  Every request made
+here counts against the same weekly / daily quotas.
+
+Provider quirks
+---------------
+- **Codex** backend does NOT support ``temperature`` / ``top_p``.
+  Sending those parameters causes HTTP 400.
+- **Gemini** backend supports ``temperature``.
+"""
+
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterator
+from enum import Enum
 from typing import Any
 
 import httpx
 
 from src.config import settings
+
+
+# ── Codex models (no temperature support) ────────────────────────────
+_CODEX_MODELS = frozenset({
+    "codex",
+    "gpt-5.4",
+    "gpt-5.4-mini",
+    "gpt-5.3-codex",
+    "gpt-5.2-codex",
+    "gpt-5.2",
+    "gpt-5.1-codex-max",
+    "gpt-5.1-codex-mini",
+    "gpt-oss-120b",
+    "gpt-oss-20b",
+})
+
+
+class ModelTier(str, Enum):
+    """Semantic model tiers — callers express *intent*, not a model name."""
+    THINKING = "thinking"
+    BALANCED = "balanced"
+    FAST = "fast"
+
+
+def resolve_tier(tier: ModelTier | str) -> str:
+    """Map a tier to the concrete Chat2API model name from config."""
+    if isinstance(tier, str):
+        tier = ModelTier(tier)
+    mapping = {
+        ModelTier.THINKING: settings.llm_tier_thinking,
+        ModelTier.BALANCED: settings.llm_tier_balanced,
+        ModelTier.FAST: settings.llm_tier_fast,
+    }
+    return mapping[tier]
 
 
 class LLMClient:
@@ -17,11 +76,19 @@ class LLMClient:
         *,
         base_url: str | None = None,
         model: str | None = None,
+        tier: ModelTier | str | None = None,
         timeout: float = 120.0,
     ) -> None:
         self.base_url = (base_url or settings.chat2api_url).rstrip("/")
-        self.model = model or settings.chat2api_model
+        if tier is not None:
+            self.model = resolve_tier(tier)
+        else:
+            self.model = model or settings.chat2api_model
         self._client = httpx.Client(timeout=timeout)
+
+    # ------------------------------------------------------------------ #
+    #  Chat                                                               #
+    # ------------------------------------------------------------------ #
 
     def chat(
         self,
@@ -30,29 +97,25 @@ class LLMClient:
         temperature: float | None = 0.7,
         max_tokens: int | None = None,
     ) -> str:
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "stream": False,
-        }
-        if temperature is not None:
-            payload["temperature"] = temperature
-        if max_tokens is not None:
-            payload["max_tokens"] = max_tokens
-
+        payload = self._build_payload(
+            messages, temperature=temperature, max_tokens=max_tokens, stream=False,
+        )
         response = self._client.post(
-            f"{self.base_url}/v1/chat/completions",
-            json=payload,
+            f"{self.base_url}/v1/chat/completions", json=payload,
         )
         response.raise_for_status()
 
-        payload = response.json()
-        choices = payload.get("choices") or []
+        data = response.json()
+        choices = data.get("choices") or []
         if not choices:
             raise ValueError("Chat2API returned no choices.")
 
         message = choices[0].get("message") or {}
         content = message.get("content")
+
+        # Log degradation if it happened.
+        self._log_degradation(response)
+
         if isinstance(content, str):
             return content.strip()
         if isinstance(content, list):
@@ -64,6 +127,10 @@ class LLMClient:
             return "".join(text_parts).strip()
         raise ValueError("Chat2API returned an unsupported message format.")
 
+    # ------------------------------------------------------------------ #
+    #  Streaming                                                          #
+    # ------------------------------------------------------------------ #
+
     def chat_stream(
         self,
         messages: list[dict[str, Any]],
@@ -71,20 +138,11 @@ class LLMClient:
         temperature: float | None = 0.7,
         max_tokens: int | None = None,
     ) -> Iterator[str]:
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "stream": True,
-        }
-        if temperature is not None:
-            payload["temperature"] = temperature
-        if max_tokens is not None:
-            payload["max_tokens"] = max_tokens
-
+        payload = self._build_payload(
+            messages, temperature=temperature, max_tokens=max_tokens, stream=True,
+        )
         with self._client.stream(
-            "POST",
-            f"{self.base_url}/v1/chat/completions",
-            json=payload,
+            "POST", f"{self.base_url}/v1/chat/completions", json=payload,
         ) as response:
             response.raise_for_status()
             for line in response.iter_lines():
@@ -92,22 +150,65 @@ class LLMClient:
                 if token:
                     yield token
 
+    # ------------------------------------------------------------------ #
+    #  Utilities                                                          #
+    # ------------------------------------------------------------------ #
+
     def health_check(self) -> bool:
-        checks: Iterable[tuple[str, str]] = (
+        for method, url in (
             ("GET", f"{self.base_url}/health"),
             ("GET", f"{self.base_url}/v1/models"),
-        )
-        for method, url in checks:
+        ):
             try:
-                response = self._client.request(method, url)
+                r = self._client.request(method, url)
             except httpx.HTTPError:
                 continue
-            if response.status_code < 500:
+            if r.status_code < 500:
                 return True
         return False
 
     def close(self) -> None:
         self._client.close()
+
+    # ------------------------------------------------------------------ #
+    #  Internals                                                          #
+    # ------------------------------------------------------------------ #
+
+    def _build_payload(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        temperature: float | None,
+        max_tokens: int | None,
+        stream: bool,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "messages": messages,
+            "stream": stream,
+        }
+        # Codex backend rejects temperature/top_p with HTTP 400.
+        if temperature is not None and not self._is_codex():
+            payload["temperature"] = temperature
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
+        return payload
+
+    def _is_codex(self) -> bool:
+        return self.model in _CODEX_MODELS
+
+    @staticmethod
+    def _log_degradation(response: httpx.Response) -> None:
+        """Print a warning if Chat2API degraded to a different model."""
+        headers = response.headers
+        if headers.get("x-chat2api-degraded", "").lower() == "true":
+            actual = headers.get("x-chat2api-actual-model", "?")
+            reason = headers.get("x-chat2api-degraded-reason", "unknown")
+            import sys
+            print(
+                f"[LLM] degraded to {actual} ({reason})",
+                file=sys.stderr,
+            )
 
     @staticmethod
     def _parse_stream_line(line: str | bytes | None) -> str | None:

@@ -114,6 +114,15 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
 
+    # ── Model tiers ──
+    # Callers pick a tier; the tier resolves to a concrete Chat2API model.
+    #   thinking : deep reasoning (complex decisions, fallback analysis)
+    #   balanced : good quality + reasonable speed (general use)
+    #   fast     : low-latency replies (live customer service chat)
+    llm_tier_thinking: str = "codex"
+    llm_tier_balanced: str = "gemini-2.5-pro"
+    llm_tier_fast: str = "gemini-2.5-flash"
+
     min_refund_amount: float = 2.0
     min_refund_pct: float = 5.0
     amazon_only: bool = True

@@ -54,7 +54,6 @@ Page text:
             reply = client.chat(
                 [{"role": "user", "content": self.PROMPT.format(text=text)}],
                 temperature=0.0,
-                max_tokens=50,
             )
         except Exception:
             return None

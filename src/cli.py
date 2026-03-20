@@ -56,9 +56,10 @@ def collect(
         with db.connection() as connection:
             for order in orders:
                 repository.upsert_order(connection, order)
+                connection.commit()
                 items = scraper.scrape_order_items(order.order_id)
                 repository.upsert_items(connection, items)
-            connection.commit()
+                connection.commit()
 
         console.print(f"[green]Collected {len(orders)} orders.[/green]")
     finally:

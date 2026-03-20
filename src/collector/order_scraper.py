@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 from src.browser.connection import BrowserManager
+from src.browser.selectors import SELECTORS as SEL
 from src.browser.stealth import human_scroll, random_delay
 from src.collector.parsers import (
     extract_asin,
@@ -47,7 +48,7 @@ class OrderScraper:
             if current_page_orders and stale_dates == len(current_page_orders):
                 break
 
-            next_button = page.query_selector("li.a-last a")
+            next_button = SEL["next_page"].find(page)
             if not next_button:
                 break
 
@@ -69,12 +70,11 @@ class OrderScraper:
         random_delay(1.0, 2.5)
 
         items: list[Item] = []
-        item_elements = self.page.query_selector_all(".shipment .a-fixed-left-grid")
+        item_elements = SEL["purchased_items"].find_all(self.page)
 
         for element in item_elements:
-            link_element = element.query_selector(
-                'a[href*="/dp/"], a[href*="/gp/product/"]'
-            )
+            # Title and link
+            link_element = SEL["item_title_link"].find(element)
             if not link_element:
                 continue
 
@@ -84,18 +84,26 @@ class OrderScraper:
                 continue
 
             title = truncate_title(link_element.inner_text().strip())
-            price_element = element.query_selector(".a-color-price")
-            seller_element = element.query_selector(".a-size-small.a-color-secondary")
+
+            # Price
+            price_text = ""
+            price_el = SEL["unit_price"].find(element)
+            if price_el:
+                price_text = price_el.inner_text().strip()
+
+            # Seller
+            seller_text = ""
+            merchant_el = SEL["ordered_merchant"].find(element)
+            if merchant_el:
+                seller_text = merchant_el.inner_text().strip()
 
             item = Item(
                 order_id=order_id,
                 asin=asin,
                 title=title,
-                purchase_price=parse_price_text(
-                    price_element.inner_text() if price_element else ""
-                ),
+                purchase_price=parse_price_text(price_text),
                 product_url=self._build_product_url(href, asin),
-                seller=seller_element.inner_text().strip() if seller_element else "",
+                seller=seller_text,
             )
             items.append(item)
 
@@ -105,34 +113,23 @@ class OrderScraper:
         if self.page is None:
             return []
 
-        cards = self.page.query_selector_all(".order-card, .a-box-group.order")
+        cards = SEL["order_card"].find_all(self.page)
         orders: list[Order] = []
 
         for card in cards:
-            order_id = self._extract_order_id(card)
-            if not order_id:
+            info = self._extract_order_info(card)
+            if not info["order_id"]:
                 continue
 
-            date_text = self._extract_first_text(
-                card,
-                [
-                    ".order-info .a-column:nth-child(1) .value",
-                    ".order-info .value",
-                ],
-            )
-            parsed_date = parse_order_date(date_text)
+            parsed_date = parse_order_date(info["date_text"])
             if parsed_date is None:
                 continue
 
-            total_text = self._extract_first_text(
-                card,
-                [".yohtmlc-order-total .value", ".a-color-price"],
-            )
             orders.append(
                 Order(
-                    order_id=order_id,
+                    order_id=info["order_id"],
                     order_date=parsed_date,
-                    total_amount=parse_price_text(total_text),
+                    total_amount=parse_price_text(info["total_text"]),
                     status="collected" if parsed_date >= cutoff else "historical",
                 )
             )
@@ -140,25 +137,36 @@ class OrderScraper:
         return orders
 
     @staticmethod
-    def _extract_order_id(card: object) -> str:
-        attr_node = card.query_selector("[data-order-id]")
-        if attr_node:
-            attr_value = attr_node.get_attribute("data-order-id")
-            if attr_value:
-                return attr_value.strip()
+    def _extract_order_info(card: object) -> dict[str, str]:
+        """Extract order_id, date, and total from an order card.
 
-        text_node = card.query_selector(".yohtmlc-order-id span.value")
-        if text_node:
-            return text_node.inner_text().strip()
-        return ""
+        Amazon order cards use a flat list of ``.a-color-secondary`` spans
+        laid out as label/value pairs:
 
-    @staticmethod
-    def _extract_first_text(node: object, selectors: list[str]) -> str:
-        for selector in selectors:
-            found = node.query_selector(selector)
-            if found:
-                return found.inner_text().strip()
-        return ""
+            ORDER PLACED | <date> | TOTAL | <amount> | SHIP TO | ... | ORDER # | <id>
+        """
+        spans = SEL["order_info_spans"].find_all(card)
+        texts = [s.inner_text().strip() for s in spans]
+
+        result: dict[str, str] = {"order_id": "", "date_text": "", "total_text": ""}
+
+        for idx, text in enumerate(texts):
+            upper = text.upper()
+            if idx + 1 < len(texts):
+                if "ORDER PLACED" in upper:
+                    result["date_text"] = texts[idx + 1]
+                elif upper == "TOTAL":
+                    result["total_text"] = texts[idx + 1]
+                elif "ORDER #" in upper or "ORDER NUMBER" in upper:
+                    result["order_id"] = texts[idx + 1]
+
+        # Fallback: try the older selectors
+        if not result["order_id"]:
+            oid_node = SEL["order_id_fallback"].find(card)
+            if oid_node:
+                result["order_id"] = oid_node.inner_text().strip()
+
+        return result
 
     @staticmethod
     def _build_product_url(href: str, asin: str) -> str:

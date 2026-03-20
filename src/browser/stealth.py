@@ -28,3 +28,28 @@ def human_scroll(
 def jittered_interval(base_seconds: float, jitter_pct: float = 0.3) -> float:
     jitter = base_seconds * jitter_pct
     return base_seconds + random.uniform(-jitter, jitter)
+
+
+def keep_typing_indicator(page: object, input_selector: str) -> None:
+    """Put a few dots in the textarea so the agent sees a typing indicator.
+
+    Call this *before* a potentially slow operation (e.g. LLM call) so the
+    agent on the other end sees "..." and knows the customer is composing.
+    """
+    try:
+        el = page.query_selector(input_selector)
+        if el:
+            el.click()
+            el.fill("...")
+    except Exception:
+        pass
+
+
+def clear_typing_indicator(page: object, input_selector: str) -> None:
+    """Remove the placeholder dots inserted by :func:`keep_typing_indicator`."""
+    try:
+        el = page.query_selector(input_selector)
+        if el:
+            el.fill("")
+    except Exception:
+        pass
