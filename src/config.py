@@ -100,12 +100,8 @@ def _resolve_annotation(annotation: Any, default: Any) -> Any:
 class Settings(BaseSettings):
     cdp_port: int = 9222
 
-    db_backend: str = "oracle"
-    db_user: str = ""
-    db_password: str = ""
-    db_dsn: str = ""
-    db_wallet_dir: str | None = None
-    db_wallet_password: str | None = None
+    db_backend: str = "sqlite"
+    db_path: str = "data/amazon_refund.db"
 
     llm_provider: str = "openai_compatible"
     llm_base_url: str = "http://127.0.0.1:7860"
@@ -141,10 +137,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_prefix="AR_")
 
     @property
-    def resolved_db_wallet_dir(self) -> str | None:
-        if not self.db_wallet_dir:
-            return None
-        return str(Path(self.db_wallet_dir).expanduser())
+    def resolved_db_path(self) -> Path:
+        return Path(self.db_path).expanduser()
 
 
 settings = Settings()

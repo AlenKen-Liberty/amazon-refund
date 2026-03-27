@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import sys
 from typing import TYPE_CHECKING, Any
 
 from src.config import settings
+
+# crystalCDP lives outside this project
+sys.path.insert(0, "/home/ubuntu/scripts/crystalCDP")
 
 if TYPE_CHECKING:
     from patchright.sync_api import Browser, BrowserContext, Page, Playwright
@@ -11,23 +15,23 @@ else:
 
 
 class BrowserManager:
-    """Manage a CDP connection to the user's already logged-in browser."""
+    """Manage a CDP connection via crystalCDP to the user's already logged-in browser."""
 
     def __init__(self) -> None:
-        self._playwright: Playwright | None = None
+        self._engine: Any = None
         self._browser: Browser | None = None
 
     def connect(self) -> Browser:
         if self._browser is not None:
             return self._browser
 
-        from patchright.sync_api import sync_playwright
+        from browser import Browser as CrystalBrowser
 
-        self._playwright = sync_playwright().start()
-        self._browser = self._playwright.chromium.connect_over_cdp(
-            endpoint_url=f"http://127.0.0.1:{settings.cdp_port}",
-            timeout=10_000,
+        self._engine = CrystalBrowser(
+            cdp_url=f"http://127.0.0.1:{settings.cdp_port}",
         )
+        self._engine.launch()
+        self._browser = self._engine._browser
         return self._browser
 
     def get_context(self) -> BrowserContext:
@@ -48,12 +52,10 @@ class BrowserManager:
         return self.get_context().new_page()
 
     def close(self) -> None:
-        if self._browser is not None:
-            self._browser.close()
-            self._browser = None
-        if self._playwright is not None:
-            self._playwright.stop()
-            self._playwright = None
+        if self._engine is not None:
+            self._engine.close()
+            self._engine = None
+        self._browser = None
 
     def _require_browser(self) -> Browser:
         if self._browser is None:

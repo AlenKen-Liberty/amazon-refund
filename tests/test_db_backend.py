@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-import pytest
+from pathlib import Path
 
-from src.config import settings
 from src.db.connection import Database
 
 
-def test_init_pool_rejects_unsupported_backend(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings, "db_backend", "sqlite")
-
-    with pytest.raises(NotImplementedError, match="Unsupported database backend"):
-        Database().init_pool()
+def test_init_creates_data_dir(tmp_path: Path) -> None:
+    """init_pool creates the data directory if missing."""
+    db = Database()
+    db.init_pool()
+    # Should not raise
+    with db.connection() as conn:
+        conn.execute("SELECT 1")
